@@ -23,10 +23,12 @@ type locationAreaResponse struct {
 	} `json:"results"`
 }
 
+var offset int = 0
+
 func main() {
 	for {
 		fmt.Println("Welcome to the Pokedex!")
-		fmt.Println("pokedex >")
+		fmt.Println("pokedex > ")
 		input := getInput()
 		if err := parseInput(input); err != nil {
 			fmt.Println("Error:", err)
@@ -64,7 +66,7 @@ func parseInput(input string) error {
 		{
 			name:        "mapb",
 			description: "Display map (previous 20 locations)",
-			callback:    displayHelp,
+			callback:    displayMapBack,
 		},
 	}
 
@@ -88,7 +90,24 @@ func displayHelp() error {
 }
 
 func displayMap() error {
-	locations, err := getLocations()
+	locations, err := getLocations(offset)
+	if err != nil {
+		return err
+	}
+	for _, loc := range locations {
+		fmt.Println(loc)
+	}
+	offset += 20
+	return nil
+}
+
+func displayMapBack() error {
+	if offset >= 20 {
+		offset -= 20
+	} else {
+		return fmt.Errorf("no previous locations to display")
+	}
+	locations, err := getLocations(offset)
 	if err != nil {
 		return err
 	}
@@ -98,9 +117,8 @@ func displayMap() error {
 	return nil
 }
 
-func getLocations() ([]string, error) {
-	url := "https://pokeapi.co/api/v2/location-area"
-
+func getLocations(offset int) ([]string, error) {
+	url := fmt.Sprintf("https://pokeapi.co/api/v2/location-area?offset=%d&limit=20", offset)
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching locations: %w", err)
@@ -113,12 +131,12 @@ func getLocations() ([]string, error) {
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("error reading response body: %s", err)
+		return nil, fmt.Errorf("error reading response body: %w", err)
 	}
 
 	var result locationAreaResponse
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("error parsing response body: %s", err)
+		return nil, fmt.Errorf("error parsing response body: %w", err)
 	}
 
 	locations := make([]string, len(result.Results))
