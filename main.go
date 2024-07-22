@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"github.com/kainpets/pokedex/internal/pokecache"
 	"strings"
+	"time"
 )
 
 type cliCommand struct {
@@ -23,10 +25,14 @@ type locationAreaResponse struct {
 	} `json:"results"`
 }
 
-var offset int = 0
+var (
+	cache  *pokecache.Cache
+	offset int = 0
+)
 
 func main() {
 	for {
+		cache = pokecache.NewCache(5 * time.Minute)
 		fmt.Println("Welcome to the Pokedex!")
 		fmt.Println("pokedex > ")
 		input := getInput()
@@ -119,6 +125,16 @@ func displayMapBack() error {
 
 func getLocations(offset int) ([]string, error) {
 	url := fmt.Sprintf("https://pokeapi.co/api/v2/location-area?offset=%d&limit=20", offset)
+
+	if cachedData, found := cache.Get(url); found {
+		var result locationAreaResponse
+		err := json.Unmarshal(cachedData, &result)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing cached response: %w", err)
+		}
+		return extractLocationNames(result), nil
+	}
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching locations: %w", err)
@@ -134,15 +150,20 @@ func getLocations(offset int) ([]string, error) {
 		return nil, fmt.Errorf("error reading response body: %w", err)
 	}
 
+	cache.Add(url, body)
+
 	var result locationAreaResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("error parsing response body: %w", err)
 	}
 
-	locations := make([]string, len(result.Results))
+	return extractLocationNames(result), nil
+}
+
+func extractLocationNames(result locationAreaResponse) []string {
+	locations := make([]string, 0, len(result.Results))
 	for i, loc := range result.Results {
 		locations[i] = loc.Name
 	}
-
-	return locations, nil
+	return locations
 }
