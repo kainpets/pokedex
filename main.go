@@ -34,7 +34,8 @@ func main() {
 	for {
 		cache = pokecache.NewCache(5 * time.Minute)
 		fmt.Println("Welcome to the Pokedex!")
-		fmt.Println("pokedex > ")
+		displayHelp()
+		fmt.Print("pokedex > ")
 		input := getInput()
 		if err := parseInput(input); err != nil {
 			fmt.Println("Error:", err)
@@ -100,6 +101,12 @@ func displayMap() error {
 	if err != nil {
 		return err
 	}
+
+	if len(locations) == 0 {
+		fmt.Println("No more location to display.")
+		return nil
+	}
+
 	for _, loc := range locations {
 		fmt.Println(loc)
 	}
@@ -132,7 +139,7 @@ func getLocations(offset int) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("error parsing cached response: %w", err)
 		}
-		return extractLocationNames(result), nil
+		return extractLocationNames(result)
 	}
 
 	resp, err := http.Get(url)
@@ -157,13 +164,17 @@ func getLocations(offset int) ([]string, error) {
 		return nil, fmt.Errorf("error parsing response body: %w", err)
 	}
 
-	return extractLocationNames(result), nil
+	return extractLocationNames(result)
 }
 
-func extractLocationNames(result locationAreaResponse) []string {
-	locations := make([]string, 0, len(result.Results))
+func extractLocationNames(result locationAreaResponse) ([]string, error) {
+	if len(result.Results) == 0 {
+		return nil, fmt.Errorf("no locations found")
+	}
+
+	locations := make([]string, len(result.Results))
 	for i, loc := range result.Results {
 		locations[i] = loc.Name
 	}
-	return locations
+	return locations, nil
 }
