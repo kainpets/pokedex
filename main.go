@@ -31,10 +31,11 @@ var (
 )
 
 func main() {
+	cache = pokecache.NewCache(5 * time.Minute)
+	fmt.Println("Welcome to the Pokedex!")
+	displayHelp()
+	
 	for {
-		cache = pokecache.NewCache(5 * time.Minute)
-		fmt.Println("Welcome to the Pokedex!")
-		displayHelp()
 		fmt.Print("pokedex > ")
 		input := getInput()
 		if err := parseInput(input); err != nil {
