@@ -7,15 +7,15 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"github.com/kainpets/pokedex/internal/pokecache"
 	"strings"
 	"time"
+	"github.com/kainpets/pokedex/internal/pokecache"
 )
 
 type cliCommand struct {
 	name        string
 	description string
-	callback    func() error
+	callback    func([]string) error
 }
 
 type locationAreaResponse struct {
@@ -34,7 +34,7 @@ func main() {
 	cache = pokecache.NewCache(5 * time.Minute)
 	fmt.Println("Welcome to the Pokedex!")
 	displayHelp()
-	
+
 	for {
 		fmt.Print("pokedex > ")
 		input := getInput()
@@ -55,33 +55,45 @@ func getInput() string {
 }
 
 func parseInput(input string) error {
+	parts := strings.Fields(input)
+	if len(parts) == 0 {
+		return fmt.Errorf("no command entered")
+	}
+
+	commandName := parts[0]
+	args := parts[1:]
+
 	commands := []cliCommand{
 		{
 			name:        "exit",
 			description: "Exit the program",
-			callback:    func() error { os.Exit(0); return nil },
+			callback:    func([]string) error { os.Exit(0); return nil },
 		},
 		{
 			name:        "help",
 			description: "Display this help message",
-			callback:    displayHelp,
+			callback:    func([]string) error { return displayHelp() },
 		},
 		{
 			name:        "map",
 			description: "Display map (next 20 locations)",
-			callback:    displayMap,
+			callback:    func([]string) error { return displayMap() },
 		},
 		{
 			name:        "mapb",
 			description: "Display map (previous 20 locations)",
-			callback:    displayMapBack,
+			callback:    func([]string) error { return displayMapBack() },
+		},
+		{
+			name:        "explore",
+			description: "Explore an area",
+			callback:    exploreArea,
 		},
 	}
 
-	input = strings.ToLower(input)
 	for _, cmd := range commands {
-		if input == cmd.name {
-			return cmd.callback()
+		if commandName == cmd.name {
+			return cmd.callback(args)
 		}
 	}
 
@@ -91,6 +103,7 @@ func parseInput(input string) error {
 func displayHelp() error {
 	fmt.Println("Commands:")
 	fmt.Println("map: Display map (next 20 locations)")
+	fmt.Println("explore <area_name>: Explore an area")
 	fmt.Println("mapb: Display map (previous 20 locations)")
 	fmt.Println("exit: Exit the program")
 	fmt.Println("help: Display this help message")
@@ -112,6 +125,16 @@ func displayMap() error {
 		fmt.Println(loc)
 	}
 	offset += 20
+	return nil
+}
+
+func exploreArea(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("area name not provided")
+	}
+	areaName := strings.Join(args, " ")
+	fmt.Printf("Exploring area %s...\n", areaName)
+
 	return nil
 }
 
