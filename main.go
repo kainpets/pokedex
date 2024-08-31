@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
 	"strings"
@@ -45,13 +46,22 @@ type pokemonDetailsResponse struct {
 	Weight int `json:"weight"`
 }
 
+type CaughtPokemon struct {
+	Name string
+	BaseExperience int
+	Height int
+	Weight int
+}
+
 var (
 	cache  *pokecache.Cache
 	offset int = 0
+	caughtPokemon []CaughtPokemon
 )
 
 func main() {
 	cache = pokecache.NewCache(5 * time.Minute)
+	rand.Seed(time.Now().UnixNano())
 	fmt.Println("Welcome to the Pokedex!")
 	displayHelp()
 
@@ -114,6 +124,11 @@ func parseInput(input string) error {
 			description: "Catch a pokemon",
 			callback:    catchPokemon,
 		},
+		{
+			name:        "pokedex",
+			description: "View caught pokemon",
+			callback:    viewPokedex,
+		},
 	}
 
 	for _, cmd := range commands {
@@ -128,8 +143,10 @@ func parseInput(input string) error {
 func displayHelp() error {
 	fmt.Println("Commands:")
 	fmt.Println("map: Display map (next 20 locations)")
-	fmt.Println("explore <area_name>: Explore an area")
 	fmt.Println("mapb: Display map (previous 20 locations)")
+	fmt.Println("explore <area_name>: Explore an area")
+	fmt.Println("catch: <pokemon_name>: Attempt to catch a pokemon")
+	fmt.Println("pokedex: View caught pokemon")
 	fmt.Println("exit: Exit the program")
 	fmt.Println("help: Display this help message")
 	return nil
@@ -240,8 +257,38 @@ func catchPokemon(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Pokemon Details:%v\n", pokemonDetails)
+	catchChance := calculateCatchChance(pokemonDetails.BaseExperience)
+	roll := rand.Float64()
 
+	if roll < catchChance {
+		fmt.Printf("Congratulations! You caught a %s!\n", pokemonName)
+		caughtPokemon = append(caughtPokemon, CaughtPokemon{
+			Name: pokemonDetails.Name,
+			BaseExperience: pokemonDetails.BaseExperience,
+			Height: pokemonDetails.Height,
+			Weight: pokemonDetails.Weight,
+		})
+	} else {
+		fmt.Printf("Oh no! The %s got away!\n", pokemonName)
+	}
+
+	return nil
+}
+
+func calculateCatchChance(BaseExperience int) float64 {
+	return 1.0 / (float64(BaseExperience) / 100.0)
+}
+
+func viewPokedex(args []string) error {
+	if len(caughtPokemon) == 0 {
+		fmt.Println("You haven't caught any pokemon yet!")
+		return nil
+	}
+
+	fmt.Println("Your Pokedex:")
+	for i, pokemon := range caughtPokemon {
+		fmt.Printf("%d. %s (Base Experience: %d)\n", i+1, pokemon.Name, pokemon.BaseExperience)
+	}
 	return nil
 }
 
