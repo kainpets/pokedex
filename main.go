@@ -34,21 +34,15 @@ type areaDetailsResponse struct {
 			Name string `json:"name"`
 			URL  string `json:"url"`
 		} `json:"pokemon"`
-		VersionDetails []struct {
-			Version struct {
-				Name string `json:"name"`
-			} `json:"version"`
-			MaxChance        int `json:"max_chance"`
-			EncounterDetails []struct {
-				MinLevel int `json:"min_level"`
-				MaxLevel int `json:"max_level"`
-				Chance   int `json:"chance"`
-				Method   struct {
-					Name string `json:"name"`
-				} `json:"method"`
-			} `json:"encounter_details"`
-		} `json:"version_details"`
 	} `json:"pokemon_encounters"`
+}
+
+type pokemonDetailsResponse struct {
+	ID  int    `json:"id"`
+	Name string `json:"name"`
+	BaseExperience int `json:"base_experience"`
+	Height int `json:"height"`
+	Weight int `json:"weight"`
 }
 
 var (
@@ -115,6 +109,11 @@ func parseInput(input string) error {
 			description: "Explore an area",
 			callback:    exploreArea,
 		},
+		{
+			name:        "catch",
+			description: "Catch a pokemon",
+			callback:    catchPokemon,
+		},
 	}
 
 	for _, cmd := range commands {
@@ -154,6 +153,22 @@ func displayMap() error {
 	return nil
 }
 
+func displayMapBack() error {
+	if offset >= 20 {
+		offset -= 20
+	} else {
+		return fmt.Errorf("no previous locations to display")
+	}
+	locations, err := getLocations(offset)
+	if err != nil {
+		return err
+	}
+	for _, loc := range locations {
+		fmt.Println(loc)
+	}
+	return nil
+}
+
 func exploreArea(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("area name not provided")
@@ -171,34 +186,8 @@ func exploreArea(args []string) error {
 
 	for _, encounter := range areaDetails.PokemonEncounters {
 		fmt.Printf(" - %s\n", encounter.Pokemon.Name)
-		for _, versionDetail := range encounter.VersionDetails {
-			fmt.Printf("   Version: %s\n", versionDetail.Version.Name)
-			for _, encounterDetail := range versionDetail.EncounterDetails {
-				fmt.Printf("     Level: %d-%d, Chance: %d%%, Method: %s\n",
-					encounterDetail.MinLevel,
-					encounterDetail.MaxLevel,
-					encounterDetail.Chance,
-					encounterDetail.Method.Name)
-			}
-		}
 	}
 
-	return nil
-}
-
-func displayMapBack() error {
-	if offset >= 20 {
-		offset -= 20
-	} else {
-		return fmt.Errorf("no previous locations to display")
-	}
-	locations, err := getLocations(offset)
-	if err != nil {
-		return err
-	}
-	for _, loc := range locations {
-		fmt.Println(loc)
-	}
 	return nil
 }
 
@@ -232,6 +221,60 @@ func getAreaDetails(areaName string) (*areaDetailsResponse, error) {
 	cache.Add(url, body)
 
 	var result areaDetailsResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("error parsing response body: %w", err)
+	}
+
+	return &result, nil
+}
+
+func catchPokemon(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("pokemon name not provided")
+	}
+
+	pokemonName := strings.Join(args, "-")
+	fmt.Printf("Catching pokemon %s...\n", pokemonName)
+
+	pokemonDetails, err := getPokemonDetails(pokemonName)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Pokemon Details:%v\n", pokemonDetails)
+
+	return nil
+}
+
+func getPokemonDetails(pokemon string) (*pokemonDetailsResponse, error) {
+	url := fmt.Sprintf("https://pokeapi.co/api/v2/pokemon/%s/", pokemon)
+
+	if cachedData, found := cache.Get(url); found {
+		var result pokemonDetailsResponse
+		err := json.Unmarshal(cachedData, &result)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing cached response: %w", err)
+		}
+		return &result, nil
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching area details: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("error fetching area details: %s", resp.Status)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	cache.Add(url, body)
+
+	var result pokemonDetailsResponse
 	if err := json.Unmarshal(body, &result); err != nil {
 		return nil, fmt.Errorf("error parsing response body: %w", err)
 	}
