@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"time"
+
 	"github.com/kainpets/pokedex/internal/pokecache"
 )
 
@@ -23,6 +24,31 @@ type locationAreaResponse struct {
 		Name string `json:"name"`
 		URL  string `json:"url"`
 	} `json:"results"`
+}
+
+type areaDetailsResponse struct {
+	ID                int    `json:"id"`
+	Name              string `json:"name"`
+	PokemonEncounters []struct {
+		Pokemon struct {
+			Name string `json:"name"`
+			URL  string `json:"url"`
+		} `json:"pokemon"`
+		VersionDetails []struct {
+			Version struct {
+				Name string `json:"name"`
+			} `json:"version"`
+			MaxChance        int `json:"max_chance"`
+			EncounterDetails []struct {
+				MinLevel int `json:"min_level"`
+				MaxLevel int `json:"max_level"`
+				Chance   int `json:"chance"`
+				Method   struct {
+					Name string `json:"name"`
+				} `json:"method"`
+			} `json:"encounter_details"`
+		} `json:"version_details"`
+	} `json:"pokemon_encounters"`
 }
 
 var (
@@ -132,8 +158,30 @@ func exploreArea(args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("area name not provided")
 	}
-	areaName := strings.Join(args, " ")
+	areaName := strings.Join(args, "-")
 	fmt.Printf("Exploring area %s...\n", areaName)
+
+	areaDetails, err := getAreaDetails(areaName)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Name: %s\n", areaDetails.Name)
+	fmt.Printf("Pokemon Encounters:\n")
+
+	for _, encounter := range areaDetails.PokemonEncounters {
+		fmt.Printf(" - %s\n", encounter.Pokemon.Name)
+		for _, versionDetail := range encounter.VersionDetails {
+			fmt.Printf("   Version: %s\n", versionDetail.Version.Name)
+			for _, encounterDetail := range versionDetail.EncounterDetails {
+				fmt.Printf("     Level: %d-%d, Chance: %d%%, Method: %s\n",
+					encounterDetail.MinLevel,
+					encounterDetail.MaxLevel,
+					encounterDetail.Chance,
+					encounterDetail.Method.Name)
+			}
+		}
+	}
 
 	return nil
 }
@@ -152,6 +200,43 @@ func displayMapBack() error {
 		fmt.Println(loc)
 	}
 	return nil
+}
+
+func getAreaDetails(areaName string) (*areaDetailsResponse, error) {
+	url := fmt.Sprintf("https://pokeapi.co/api/v2/location-area/%s/", areaName)
+
+	if cachedData, found := cache.Get(url); found {
+		var result areaDetailsResponse
+		err := json.Unmarshal(cachedData, &result)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing cached response: %w", err)
+		}
+		return &result, nil
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("error fetching area details: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("error fetching area details: %s", resp.Status)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	cache.Add(url, body)
+
+	var result areaDetailsResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("error parsing response body: %w", err)
+	}
+
+	return &result, nil
 }
 
 func getLocations(offset int) ([]string, error) {
