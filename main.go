@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,23 +40,23 @@ type areaDetailsResponse struct {
 }
 
 type pokemonDetailsResponse struct {
-	ID  int    `json:"id"`
-	Name string `json:"name"`
-	BaseExperience int `json:"base_experience"`
-	Height int `json:"height"`
-	Weight int `json:"weight"`
+	ID             int    `json:"id"`
+	Name           string `json:"name"`
+	BaseExperience int    `json:"base_experience"`
+	Height         int    `json:"height"`
+	Weight         int    `json:"weight"`
 }
 
 type CaughtPokemon struct {
-	Name string
+	Name           string
 	BaseExperience int
-	Height int
-	Weight int
+	Height         int
+	Weight         int
 }
 
 var (
-	cache  *pokecache.Cache
-	offset int = 0
+	cache         *pokecache.Cache
+	offset        int = 0
 	caughtPokemon []CaughtPokemon
 )
 
@@ -126,8 +127,13 @@ func parseInput(input string) error {
 		},
 		{
 			name:        "pokedex",
-			description: "View caught pokemon",
+			description: "View a list of caught pokemon",
 			callback:    viewPokedex,
+		},
+		{
+			name:        "inspect",
+			description: "View the details of caught pokemon",
+			callback:    inspectPokemon,
 		},
 	}
 
@@ -147,6 +153,7 @@ func displayHelp() error {
 	fmt.Println("explore <area_name>: Explore an area")
 	fmt.Println("catch: <pokemon_name>: Attempt to catch a pokemon")
 	fmt.Println("pokedex: View caught pokemon")
+	fmt.Println("inspect <pokemon_index>: View the details of a caught pokemon")
 	fmt.Println("exit: Exit the program")
 	fmt.Println("help: Display this help message")
 	return nil
@@ -263,10 +270,10 @@ func catchPokemon(args []string) error {
 	if roll < catchChance {
 		fmt.Printf("Congratulations! You caught a %s!\n", pokemonName)
 		caughtPokemon = append(caughtPokemon, CaughtPokemon{
-			Name: pokemonDetails.Name,
+			Name:           pokemonDetails.Name,
 			BaseExperience: pokemonDetails.BaseExperience,
-			Height: pokemonDetails.Height,
-			Weight: pokemonDetails.Weight,
+			Height:         pokemonDetails.Height,
+			Weight:         pokemonDetails.Weight,
 		})
 	} else {
 		fmt.Printf("Oh no! The %s got away!\n", pokemonName)
@@ -289,6 +296,30 @@ func viewPokedex(args []string) error {
 	for i, pokemon := range caughtPokemon {
 		fmt.Printf("%d. %s (Base Experience: %d)\n", i+1, pokemon.Name, pokemon.BaseExperience)
 	}
+	return nil
+}
+
+func inspectPokemon(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("pokemon not provided")
+	}
+
+	index, err := strconv.Atoi(args[0])
+	if err != nil {
+		return fmt.Errorf("invalid index: %w", err)
+	}
+
+	if index < 1 || index > len(caughtPokemon) {
+		return fmt.Errorf("invalid index: must be between 1 and %d", len(caughtPokemon))
+	}
+
+	pokemon := caughtPokemon[index-1]
+
+	fmt.Printf("Name: %s\n", pokemon.Name)
+	fmt.Printf("Base Experience: %d\n", pokemon.BaseExperience)
+	fmt.Printf("Height: %d\n", pokemon.Height)
+	fmt.Printf("Weight: %d\n", pokemon.Weight)
+
 	return nil
 }
 
